@@ -9,6 +9,7 @@ from grafana_client import GrafanaApi
 from keycloak import KeycloakAdmin
 from kubernetes import client, config, utils
 from slugify import slugify
+from opentelemetry import trace
 
 load_dotenv("/vault/secrets/config")
 load_dotenv(".env")
@@ -25,36 +26,40 @@ def generate_password(length=12):
 
 
 def create_keycloak_user(username, email):
-    KEYCLOAK_BASE_URL = "https://keycloak.zerofiltre.tech"
-    REALM = "master"
-    CLIENT_ID = "xxxxxxxxx"
-    CLIENT_SECRET = "yyyyyyyyyyyyyyyy"
+    with trace.get_tracer(__name__).start_as_current_span("create_keycloak_user") as span:
+        span.set_attribute("request.email", email)
+        span.set_attribute("request.username", username)
 
-    keycloak_admin = KeycloakAdmin(
-        server_url=KEYCLOAK_BASE_URL,
-        client_id=CLIENT_ID,
-        client_secret_key=CLIENT_SECRET,
-        realm_name=REALM,
-        verify=True
-    )
+        KEYCLOAK_BASE_URL = "https://keycloak.zerofiltre.tech"
+        REALM = "master"
+        CLIENT_ID = "xxxxxxxxx"
+        CLIENT_SECRET = "yyyyyyyyyyyyyyyy"
 
-    generated_password = generate_password()
+        keycloak_admin = KeycloakAdmin(
+            server_url=KEYCLOAK_BASE_URL,
+            client_id=CLIENT_ID,
+            client_secret_key=CLIENT_SECRET,
+            realm_name=REALM,
+            verify=True
+        )
 
-    user_data = {
-        'email': email,
-        'enabled': True,
-        'username': username,
-        'credentials': [{'type': 'password', 'value': generated_password}]
-    }
+        generated_password = generate_password()
 
-    user_id = keycloak_admin.get_user_id(username)
+        user_data = {
+            'email': email,
+            'enabled': True,
+            'username': username,
+            'credentials': [{'type': 'password', 'value': generated_password}]
+        }
 
-    if not user_id:
-        keycloak_admin.create_user(user_data, exist_ok=True)
-    else:
-        return "CREATED"
+        user_id = keycloak_admin.get_user_id(username)
 
-    user_id = keycloak_admin.get_user_id(username)
+        if not user_id:
+            keycloak_admin.create_user(user_data, exist_ok=True)
+        else:
+            return "CREATED"
+
+        user_id = keycloak_admin.get_user_id(username)
 
     return user_id, generated_password
 
