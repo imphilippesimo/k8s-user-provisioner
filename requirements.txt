@@ -35,3 +35,4 @@ verlib2==0.2.0
 websocket-client==1.6.2
 Werkzeug==2.3.7
 opentelemetry-api
+opentelemetry-sdk

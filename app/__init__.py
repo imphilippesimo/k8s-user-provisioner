@@ -2,6 +2,8 @@ import logging
 import os
 
 from flask import Flask, request
+from opentelemetry import metrics
+from opentelemetry.sdk.metrics import MeterProvider
 
 from app.utils import create_keycloak_user, apply_k8s_config, delete_keycloak_user, delete_k8s_namespace, \
     create_grafana_user, delete_grafana_user, make_username, make_usernames
@@ -9,6 +11,14 @@ from app.utils import create_keycloak_user, apply_k8s_config, delete_keycloak_us
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+# Configure OpenTelemetry Metrics
+metrics.set_meter_provider(MeterProvider())
+meter = metrics.get_meter(__name__)
+provisioner_request_counter = meter.create_counter(
+    "provisioner_request",
+    description="Counts the number of users provisioned",
+)
 
 
 @app.route('/')
@@ -35,6 +45,7 @@ def provisioner():
         return {'message': 'Email address and full name are missing'}, 400
 
     username = make_username(email, full_name)
+    provisioner_request_counter.add(1, {"username": username})
     logger.info(f"will attempt to create sandbox with username : {username}")
 
     user_data = create_keycloak_user(username, email)
@@ -56,6 +67,7 @@ def provisioner():
         delete_keycloak_user(username)
         delete_k8s_namespace(username)
         return {'message': "Can't create grafana user"}, 500
+
 
     return {
         'message': 'User has been successfully created',
